@@ -36,3 +36,8 @@ If you want to delete the repository:
 ```
 tofu destroy
 ```
+### Confirm that you tofu config is valid
+
+```
+tofu validate
+```
