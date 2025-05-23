@@ -1,92 +1,71 @@
 name: "OpenTofu"
 
 on:
-    push:
-        branches: [ main ]
-    pull_request:
-        branches: [ main ]
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
 
 permissions:
-    contents: read
-    pull-requests: write
+  contents: read
+  pull-requests: write
 
-jobs: 
-    opentofu:
-        name: "OpenTofu"
-        runs-on: ubuntu-latest
+jobs:
+  opentofu:
+    name: "OpenTofu"
+    runs-on: ubuntu-latest
+    env: 
+        TF_VAR_github_token: ${{ secrets.GH_TOKEN }}
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
-        concurrency:
-            group: ${{ github.workflow }}-${{ github.ref }}
-            cancel-in-progress: true
+      - name: Setup OpenTofu
+        uses: opentofu/setup-opentofu@v1
+        with:
+          tofu_version: "1.6.0"
+          
+      - name: OpenTofu Init
+        id: init
+        run: tofu init
+        
+      - name: OpenTofu Validate
+        id: validate
+        run: tofu validate -no-color
+        
+      - name: OpenTofu Plan
+        id: plan
+        run: tofu plan -no-color -out plan
+        continue-on-error: true
+        
+      - name: Update Pull Request
+        uses: actions/github-script@v6
+        if: github.event_name == 'pull_request'
+        env:
+          PLAN: "${{ steps.plan.outputs.stdout }}"
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const output = `#### OpenTofu Initialization ⚙️\`${{ steps.init.outcome }}\`
+            #### OpenTofu Validation 🤖\`${{ steps.validate.outcome }}\`
+            #### OpenTofu Plan 📖\`${{ steps.plan.outcome }}\`
 
-        steps:
-            - name: Checkout
-              uses: actions/checkout@v4
+            <details><summary>Show Plan</summary>
 
-            - name: Setup OpenTofu
-              uses: opentofu/setup-opentofu@v1
-              with:
-                tofu_version: "1.6.0"
+            \`\`\`terraform
+            ${process.env.PLAN}
+            \`\`\`
 
-            - name: Verify GitHub Token
-              run: |
-                if [ -z "$GH_TOKEN" ]; then
-                  echo "ERROR: GH_TOKEN secret is not set"
-                  exit 1
-                fi
-              env:
-                GH_TOKEN: ${{ secrets.GH_TOKEN }}
+            </details>`;
 
-            - name: OpenTofu Format
-              id: fmt
-              run: tofu fmt -check
-              continue-on-error: true
-
-            - name: OpenTofu Init
-              id: init
-              run: tofu init
-
-            - name: OpenTofu Validate
-              id: validate
-              run: tofu validate -no-color
-
-            - name: OpenTofu Plan
-              id: plan
-              run: tofu plan -no-color
-              env:
-                TF_VAR_github_token: ${{ secrets.GH_TOKEN }}  # Use your custom token
-              continue-on-error: true
-
-            - name: Update Pull Request
-              uses: actions/github-script@v6
-              if: github.event_name == 'pull_request'
-              env:
-                PLAN: "${{ steps.plan.outputs.stdout }}"
-              with:
-                github-token: ${{ secrets.GITHUB_TOKEN }}
-                script: |
-                  const output = `#### OpenTofu Format and Style \`${{ steps.fmt.outcome }}\`
-                  #### OpenTofu Initialization \`${{ steps.init.outcome }}\`
-                  #### OpenTofu Validation \`${{ steps.validate.outcome }}\`
-                  #### OpenTofu Plan \`${{ steps.plan.outcome }}\`
-
-                  <details><summary>Show Plan</summary>
-
-                  \`\`\`terraform
-                  ${process.env.PLAN}
-                  \`\`\`
-
-                  </details>`;
-
-                  github.rest.issues.createComment({
-                    issue_number: context.issue.number,
-                    owner: context.repo.owner,
-                    repo: context.repo.repo,
-                    body: output
-                  })
-
-            - name: OpenTofu Apply
-              if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-              run: tofu apply -auto-approve
-              env:
-                TF_VAR_github_token: ${{ secrets.GH_TOKEN }}
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: output
+            })
+            
+      - name: OpenTofu Apply
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        run: tofu apply "plan"

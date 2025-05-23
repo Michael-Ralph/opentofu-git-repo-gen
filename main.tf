@@ -12,7 +12,7 @@ provider "github" {
   owner = "Michael-Ralph"
 }
 
-resource "github_repository" "example" {
+resource "github_repository" "this" {
   name        = var.repo_name
   description = var.repo_description
   visibility  = "public"
