@@ -16,6 +16,8 @@ jobs:
     runs-on: ubuntu-latest
     env: 
         TF_VAR_github_token: ${{ secrets.GH_TOKEN }}
+        TF_VAR_repo_name: ${{ vars.REPO_NAME }}
+        TF_VAR_repo_description: ${{ vars.REPO_DESCRIPTION }}
     
     steps:
       - name: Checkout
